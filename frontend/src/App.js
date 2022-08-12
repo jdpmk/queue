@@ -1,9 +1,14 @@
 import './App.css';
+import Landing from './Landing.js';
+import Nav from './Nav.js';
+import Upcoming from './Upcoming.js';
 
 function App() {
   return (
     <div className="App">
-      <p>Hello, World</p>
+      <Nav />
+      <Landing userId={1} />
+      <Upcoming userId={1} />
     </div>
   );
 }
