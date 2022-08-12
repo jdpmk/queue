@@ -105,22 +105,29 @@ def assignment(assignment_id):
         db.session.add(assignment)
         db.session.commit()
 
-@app.route("/assignment/<int:assignment_id>/upcoming")
+@app.route("/user/<int:user_id>/courses", methods=["GET"])
+def user_courses(user_id):
+    assert request.method == "GET"
+    courses = Course.query.filter_by(user_id=user_id)
+    return [course.as_dict() for course in courses]
+
+@app.route("/course/<int:course_id>/assignments", methods=["GET"])
+def course_assignments(course_id):
+    assert request.method == "GET"
+    assignments = Assignment.query.filter_by(course_id=course_id)
+    return [assignment.as_dict() for assignment in assignments]
+
+@app.route("/assignment/<int:assignment_id>/upcoming", methods=["GET"])
 def user_assignments(assignment_id):
-    return get_upcoming_tasks(assignment_id)
+    assert request.method == "GET"
 
-class Frequency:
-    DAILY = 0
-    WEEKLY = 1
-
-def get_upcoming_tasks(assignment_id):
     assignment = Assignment.query.filter_by(assignment_id=assignment_id).first()
 
     if assignment.frequency == Frequency.DAILY:
         # TODO: add metadata option to exclude weekends
         today = date.today()
-        tomorrow = date.today() + timedelta(days=1)
-        return [today, tomorrow]
+        tomorrow = today + timedelta(days=1)
+        return { "today": today, "tomorrow": tomorrow }
     elif assignment.frequency == Frequency.WEEKLY:
         U = (assignment.frequency_metadata >> 6) & 1
         M = (assignment.frequency_metadata >> 5) & 1
@@ -139,8 +146,7 @@ def get_upcoming_tasks(assignment_id):
 
         # aggregate all remaining days this week
         while True:
-            if occurs[day.weekday()]:
-                this_week.append(day)
+            if occurs[day.weekday()]: this_week.append(day)
             day += timedelta(days=1)
             if day.weekday() == 6:
                 break
@@ -153,4 +159,40 @@ def get_upcoming_tasks(assignment_id):
             if day.weekday() == 6:
                 break
 
-        return [this_week, next_week]
+        return { "this_week": this_week, "next_week": next_week }
+
+class Frequency:
+    DAILY = 0
+    WEEKLY = 1
+
+def insert_test_data(db):
+    def add(db, obj):
+        db.session.add(obj)
+        db.session.commit()
+
+    joydeep = User(first_name="Joydeep", last_name="Mukherjee", email="joydeep2@illinois.edu")
+    add(db, joydeep)
+
+    cs374 = Course(department="CS", number=374, name="Algorithms", user_id=joydeep.user_id)
+    add(db, cs374)
+
+    cs421 = Course(department="CS", number=421, name="Compilers", user_id=joydeep.user_id)
+    add(db, cs421)
+
+    hw = Assignment(name="HW",
+                    description="Daily homework",
+                    start_on=date.today() + timedelta(days=-4),
+                    frequency=Frequency.DAILY,
+                    frequency_metadata=None,
+                    course_id=cs374.course_id)
+    mp = Assignment(name="MP",
+                    description="Weekly project",
+                    start_on=date.today(),
+                    frequency=Frequency.WEEKLY,
+                    frequency_metadata=65,  # 1 0 0 0 0 0 1
+                    course_id=cs421.course_id)
+    add(db, hw)
+    add(db, mp)
+
+db.create_all()
+insert_test_data(db)
