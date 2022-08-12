@@ -1,8 +1,10 @@
 from datetime import date, datetime, timedelta
-from flask import Flask, jsonify, request
+from flask import Flask, request
+from flask_cors import CORS, cross_origin
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
+CORS(app)
 
 # db
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
