@@ -119,8 +119,7 @@ def course_assignments(course_id):
     assignments = Assignment.query.filter_by(course_id=course_id)
     return [assignment.as_dict() for assignment in assignments]
 
-@app.route("/assignment/<int:assignment_id>/upcoming", methods=["GET"])
-def user_assignments(assignment_id):
+def assignment_upcoming(assignment_id):
     assert request.method == "GET"
 
     assignment = Assignment.query.filter_by(assignment_id=assignment_id).first()
@@ -129,7 +128,12 @@ def user_assignments(assignment_id):
         # TODO: add metadata option to exclude weekends
         today = date.today()
         tomorrow = today + timedelta(days=1)
-        return { "today": today, "tomorrow": tomorrow }
+        return {
+            "today": [today],
+            "tomorrow": [tomorrow],
+            "this_week": None,
+            "next_week": None
+        }
     elif assignment.frequency == Frequency.WEEKLY:
         U = (assignment.frequency_metadata >> 6) & 1
         M = (assignment.frequency_metadata >> 5) & 1
@@ -142,13 +146,22 @@ def user_assignments(assignment_id):
         # aligned with weekday() (0 = M, 1 = T, etc.)
         occurs = [M, T, W, H, F, S, U]
 
+        today = []
+        tomorrow = []
         this_week = []
         next_week = []
+
         day = date.today()
 
         # aggregate all remaining days this week
         while True:
-            if occurs[day.weekday()]: this_week.append(day)
+            if occurs[day.weekday()]:
+                if day == date.today():
+                    today.append(day)
+                elif day == date.today() + timedelta(days=1):
+                    tomorrow.append(day)
+                else:
+                    this_week.append(day)
             day += timedelta(days=1)
             if day.weekday() == 6:
                 break
@@ -161,7 +174,16 @@ def user_assignments(assignment_id):
             if day.weekday() == 6:
                 break
 
-        return { "this_week": this_week, "next_week": next_week }
+        return {
+            "today": today or None,
+            "tomorrow": tomorrow or None,
+            "this_week": this_week or None,
+            "next_week": next_week or None
+        }
+
+@app.route("/assignment/<int:assignment_id>/upcoming", methods=["GET"])
+def assignments(assignment_id):
+    return assignment_upcoming(assignment_id)
 
 class Frequency:
     DAILY = 0
@@ -178,23 +200,37 @@ def insert_test_data(db):
     cs374 = Course(department="CS", number=374, name="Algorithms", user_id=joydeep.user_id)
     add(db, cs374)
 
-    cs421 = Course(department="CS", number=421, name="Compilers", user_id=joydeep.user_id)
-    add(db, cs421)
+    cs126 = Course(department="CS", number=126, name="Software Design Studio", user_id=joydeep.user_id)
+    add(db, cs126)
 
-    hw = Assignment(name="HW",
-                    description="Daily homework",
+    hw = Assignment(name="CS 374 HW",
+                    description="Daily algorithms homework",
                     start_on=date.today() + timedelta(days=-4),
                     frequency=Frequency.DAILY,
                     frequency_metadata=None,
                     course_id=cs374.course_id)
-    mp = Assignment(name="MP",
-                    description="Weekly project",
+    pl = Assignment(name="CS 374 PL",
+                    description="Weekly PrairieLearn assignments for algorithms",
                     start_on=date.today(),
                     frequency=Frequency.WEEKLY,
-                    frequency_metadata=65,  # 1 0 0 0 0 0 1
-                    course_id=cs421.course_id)
+                    frequency_metadata=16,  # 0 0 1 0 0 0 0
+                    course_id=cs374.course_id)
+    mp = Assignment(name="CS 126 MP",
+                    description="Weekly Software Design Studio project",
+                    start_on=date.today(),
+                    frequency=Frequency.WEEKLY,
+                    frequency_metadata=16,  # 0 0 1 0 0 0 0
+                    course_id=cs126.course_id)
+    cr = Assignment(name="CS 126 CR",
+                    description="Weekly Software Design Studio code review",
+                    start_on=date.today(),
+                    frequency=Frequency.WEEKLY,
+                    frequency_metadata=4,  # 0 0 0 0 1 0 0
+                    course_id=cs126.course_id)
     add(db, hw)
+    add(db, pl)
     add(db, mp)
+    add(db, cr)
 
 db.create_all()
 insert_test_data(db)
